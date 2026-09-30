@@ -477,6 +477,8 @@ INTEGER, PARAMETER :: interoff = 0
 ! Switch to turn off inter-modal coagulation
 INTEGER, PARAMETER :: idustems = 0
 ! Switch for using Pringle scheme (=1) or AEROCOMdaily (=2)
+INTEGER :: iimscav
+! Switch for chosen impaction scavenging scheme
 
 REAL :: dp0                               ! Diam (nm)
 !
@@ -518,8 +520,6 @@ REAL :: act
 
 ! Switch for convective rainout (.FALSE. if done with convective transport)
 LOGICAL :: lcvrainout
-! Switch to turn on the new impaction scavenging scheme for dust
-LOGICAL :: l_dust_mp_slinn_impc_scav
 
 ! Used for debug output
 LOGICAL (KIND=log_small), ALLOCATABLE, SAVE :: mode_tracer_debug(:)
@@ -868,13 +868,23 @@ END IF
 
 ! If new Slinn impaction scavenging scheme is on for dust then turn on flag
 ! (input to UKCA_AERO_STEP) and initialise scavenging arrays
-l_dust_mp_slinn_impc_scav = glomap_config%l_dust_mp_slinn_impc_scav
+IF (glomap_config%l_dust_mp_slinn_impc_scav) THEN
+  IF (glomap_config%i_mode_setup == 11) THEN
+    iimscav = 2  ! Double moment All modes
+  ELSE
+    iimscav = 1  ! Double moment Insoluble dust only
+  END IF
+ELSE
+  iimscav = 0  ! Single moment scheme
+END IF
 IF (firstcall .AND. verbose > 0) THEN
   WRITE(umMessage, '(A27,L7)') 'L_DUST_MP_SLINN_IMPC_SCAV=',                   &
                                glomap_config%l_dust_mp_slinn_impc_scav
   CALL umPrint(umMessage, src='ukca_aero_ctl')
 END IF
-IF (l_dust_mp_slinn_impc_scav) CALL ukca_impc_scav_dust_init(verbose)
+IF (glomap_config%l_dust_mp_slinn_impc_scav) THEN
+  CALL ukca_impc_scav_dust_init(verbose)
+END IF
 
 ! Set IEXTRA_CHECKS to control checking for unacceptable MDT values
 ! With IEXTRA_CHECKS = 0, code in UKCA_AERO_CTL checks that mdt is above
@@ -1282,7 +1292,7 @@ END IF
 !$OMP drain, drydiam, dryox_in_aer, dsnow, dtc, dtm, dtz,                      &
 !$OMP firstcall, glomap_config, glomap_variables,                              &
 !$OMP iactmethod, ibln, iextra_checks, imscav_on, inucscav,                    &
-!$OMP jpctr, l_dust_mp_slinn_impc_scav, l_ukca_cmip6_diags, l_ukca_mode_diags, &
+!$OMP jpctr, iimscav, l_ukca_cmip6_diags, l_ukca_mode_diags,                   &
 !$OMP l_ukca_pm_diags, land_fraction, lbase, lcvrainout,                       &
 !$OMP log_sigmag, lscat_zhang,                                                 &
 !$OMP mass, mdtmin, mdwat_diag, mfrac_0, mh2o2f, mh2so4, mlo,                  &
@@ -2070,8 +2080,7 @@ DO ik = 1, nseg
     CALL umPrint(umMessage, src='ukca_aero_ctl')
     WRITE(umMessage, '(A12,L7)') 'lcvrainout=', lcvrainout
     CALL umPrint(umMessage, src='ukca_aero_ctl')
-    WRITE(umMessage, '(A23,L7)') 'l_dust_mp_slinn_impc_scav=',                 &
-                                  l_dust_mp_slinn_impc_scav
+    WRITE(umMessage, '(A15,I4)') 'iimscav=', iimscav
     CALL umPrint(umMessage, src='ukca_aero_ctl')
     WRITE(umMessage, '(A15,I4)') 'VERBOSE=', verbose
     CALL umPrint(umMessage, src='ukca_aero_ctl')
@@ -2104,7 +2113,7 @@ DO ik = 1, nseg
                       fine_no3_prod_on, coarse_no3_prod_on, hno3_uptake_coeff, &
                       ifuchs, idcmfp, icondiam, ibln, i_nuc_method,            &
                       iactmethod, iddepaer, inucscav, ichem,                   &
-                      lcvrainout, l_dust_mp_slinn_impc_scav, verbose_local,    &
+                      lcvrainout, iimscav, verbose_local,                      &
                       checkmd_nd, intraoff, interoff,                          &
                       seg_s0_dot_condensable, seg_lwc,seg_clwc, seg_pvol,      &
                       seg_pvol_wat, seg_jlabove, seg_ilscat, seg_n_merge_1d,   &
@@ -4913,7 +4922,9 @@ END DO  ! ik loop over segments
 ! End of OpenMP
 
 ! Deallocate lookup tables in dust impaction scavenging routine
-IF (l_dust_mp_slinn_impc_scav) CALL ukca_impc_scav_dust_dealloc()
+IF (glomap_config%l_dust_mp_slinn_impc_scav) THEN
+  CALL ukca_impc_scav_dust_dealloc()
+END IF
 
 ! postponed reporting of nbadmdt from before aero_step
 DO imode = 1, nmodes

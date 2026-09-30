@@ -47,7 +47,7 @@ SUBROUTINE ukca_aero_step(nbox,nchemg,nadvg,nbudaer,                           &
  cond_on,nucl_on,coag_on,bln_on,icoag,                                         &
  imerge,fine_no3_prod_on,coarse_no3_prod_on,hno3_uptake_coeff,                 &
  ifuchs,idcmfp,icondiam,ibln,i_nuc_method,                                     &
- iactmethod,iddepaer,inucscav,ichem,lcvrainout,l_dust_mp_slinn_impc_scav,      &
+ iactmethod,iddepaer,inucscav,ichem,lcvrainout,iimscav,                        &
  verbose,checkmd_nd,intraoff,                                                  &
  interoff,s0g_dot_condensable,lwc,clwc,pvol,pvol_wat,                          &
  jlabove,ilscat,n_merge_1d,height,htpblg)
@@ -142,8 +142,9 @@ SUBROUTINE ukca_aero_step(nbox,nchemg,nadvg,nbudaer,                           &
 !  ICHEM              : Switch for gas phase chemistry scheme (0=off,1=on)
 !  LCVRAINOUT  : Switch : .FALSE. to disable convective rainout if done
 !                          alongside convective transport
-!  l_dust_mp_slinn_impc_scav : Switch : .TRUE. for new dust and microplastics
-!                                              impaction scavenging scheme
+!  iimscav : Switch : 0 - old impaction scavenging scheme
+!                     1 - new impaction scavenging scheme, dust only
+!                     2 - new impaction scavenging scheme, all modes
 !  VERBOSE     : If =1 prints min/max (ND,MDT etc) after each process
 !                for 1st grid box (for box model tests)
 !  INTRAOFF    : Switch to turn off intra-modal coagulation
@@ -398,7 +399,7 @@ INTEGER, INTENT(IN) :: jlabove(nbox)
 INTEGER, INTENT(IN) :: ilscat(nbox)
 INTEGER (KIND=integer_32), INTENT(IN OUT) :: n_merge_1d(nbox,nmodes)
 LOGICAL, INTENT(IN) :: lcvrainout
-LOGICAL, INTENT(IN) :: l_dust_mp_slinn_impc_scav
+INTEGER, INTENT(IN) :: iimscav
 
 REAL, INTENT(IN OUT) :: rhopar(nbox,nmodes)
 REAL, INTENT(IN OUT) :: dvol(nbox,nmodes)
@@ -569,12 +570,12 @@ CALL ukca_volume_mode(glomap_variables,nbox, nd,md,mdt,                        &
 IF (imscav_on == 1) THEN
   !
   CALL ukca_impc_scav(nbox,nbudaer,nd,md,                                      &
- crain,drain,csnow,dsnow,wetdp,dtc,l_dust_mp_slinn_impc_scav,bud_aer_mas)
+ crain,drain,csnow,dsnow,wetdp,dtc,iimscav,bud_aer_mas)
 
   ! Run new impaction scavenging scheme for UKCA dust
-  IF (l_dust_mp_slinn_impc_scav) THEN
+  IF (iimscav > 0) THEN
     CALL ukca_impc_scav_dust(nbox,nbudaer,nd,md,mdt,crain,drain,               &
-                             wetdp,dtc,bud_aer_mas,iextra_checks)
+                             wetdp,dtc,iimscav,bud_aer_mas,iextra_checks)
   END IF
   !
   IF (checkmd_nd == 1) THEN

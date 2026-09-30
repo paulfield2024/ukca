@@ -22,5 +22,5 @@ SimSys_Scripts:
     ref: 2026.03.1
 
 ukca:
-    source:
+    source: /data/users/paul.field/github/ukca
     ref:

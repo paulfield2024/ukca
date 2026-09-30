@@ -70,7 +70,7 @@ CONTAINS
 
 ! ----------------------------------------------------------------------
 SUBROUTINE ukca_impc_scav_dust(nbox,nbudaer,nd,md,mdt,crain,drain,             &
-                               wetdp,dtc,bud_aer_mas,iextra_checks)
+                               wetdp,dtc,iimscav,bud_aer_mas,iextra_checks)
 ! ----------------------------------------------------------------------
 !
 ! Purpose:
@@ -108,6 +108,7 @@ SUBROUTINE ukca_impc_scav_dust(nbox,nbudaer,nd,md,mdt,crain,drain,             &
 !     DRAIN       : Dynamic rain rate array (kgm^-2s^-1)
 !     WETDP       : Wet diameter corresponding to DRYDP (m)
 !     DTC         : Time step of process (s)
+!     iimscav     : Choice of impaction scavenging scheme
 !
 !     Outputs
 !     -------
@@ -120,12 +121,17 @@ SUBROUTINE ukca_impc_scav_dust(nbox,nbudaer,nd,md,mdt,crain,drain,             &
 
 USE ukca_config_specification_mod, ONLY: glomap_variables
 
-USE ukca_mode_setup,    ONLY: cp_du, nmodes, mode_acc_insol, mode_cor_insol,   &
-                              mode_sup_insol, cp_mp
+USE ukca_mode_setup,    ONLY: cp_du, cp_mp, cp_su, nmodes,                     &
+                              mode_nuc_sol  , mode_ait_sol,                    &
+                              mode_acc_sol  , mode_cor_sol,                    &
+                              mode_acc_insol, mode_cor_insol,                  &
+                              mode_sup_insol
 
 USE ukca_setup_indices, ONLY: nmasimscduaccins, nmasimscducorins,              &
                               nmasimscdusupins, nmasimscmpaccins,              &
-                              nmasimscmpcorins, nmasimscmpsupins
+                              nmasimscmpcorins, nmasimscmpsupins,              &
+                              nmasimscsunucsol, nmasimscsuaitsol,              &
+                              nmasimscsuaccsol, nmasimscsucorsol
 
 USE ukca_mode_check_artefacts_mod, ONLY: ukca_mode_check_mdt
 USE ukca_types_mod,   ONLY: logical_32
@@ -136,6 +142,7 @@ IMPLICIT NONE
 INTEGER, INTENT(IN)  :: nbox
 INTEGER, INTENT(IN)  :: nbudaer
 INTEGER, INTENT(IN)  :: iextra_checks
+INTEGER, INTENT(IN)  :: iimscav
 REAL, INTENT(IN)     :: wetdp(nbox,nmodes)
 REAL, INTENT(IN)     :: dtc
 REAL, INTENT(IN)     :: crain(nbox)
@@ -179,6 +186,7 @@ LOGICAL :: l_interp_dp, l_interp_RF
 LOGICAL (KIND=logical_32) :: mask(nbox)
 INTEGER :: ilow,iupp,jlow,jupp,k
 INTEGER :: imode, icp, jl, iprecip
+INTEGER :: botmode
 
 INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
 INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1
@@ -199,6 +207,13 @@ ncp         => glomap_variables%ncp
 num_eps     => glomap_variables%num_eps
 sigmag      => glomap_variables%sigmag
 
+SELECT CASE (iimscav)
+CASE (1)
+  botmode = mode_acc_insol
+CASE (2)
+  botmode = 1
+END SELECT
+
 ! .. Combine the convective and dynamic rain in an array
 ! .. to loop over and convert rain from kgm-2s-1 to mm/hr
 allfrac(1)=fc
@@ -217,7 +232,7 @@ scavm(:,:,:) = 0.0
 
 ! .. Loop over mode, rain type, and gridcell to populate the
 ! .. 3D real-time scavenging arrays
-DO imode = mode_acc_insol, mode_sup_insol
+DO imode = botmode, mode_sup_insol
   IF (mode(imode)) THEN
 
     ! .. Nearest neighbour interpolation is used for standard
@@ -322,7 +337,7 @@ END DO ! .. imode
 ! .. Apply derived scavenging coefficients to input mass/number
 DO jl=1,nbox
   IF (totrain(jl) > 0.0) THEN
-    DO imode=mode_acc_insol, mode_sup_insol
+    DO imode=botmode, mode_sup_insol
       IF (mode(imode)) THEN
 
         ! .. Only do anything if the initial number is greater than
@@ -393,6 +408,22 @@ DO jl=1,nbox
           ! .. Store cpt imp scav mass fluxes for budget calculations
           DO icp=1,ncp
             IF (component(imode,icp)) THEN
+              ! NB iimscav 2 only for SOL/INSOL at present so just needs
+              ! sulfate component and not other components
+              IF (icp == cp_su) THEN
+                IF ((imode == mode_nuc_sol) .AND. (nmasimscsunucsol > 0))      &
+                  bud_aer_mas(jl,nmasimscsunucsol)=                            &
+                    bud_aer_mas(jl,nmasimscsunucsol)+dm(icp)
+                IF ((imode == mode_ait_sol) .AND. (nmasimscsuaitsol > 0))      &
+                  bud_aer_mas(jl,nmasimscsuaitsol)=                            &
+                    bud_aer_mas(jl,nmasimscsuaitsol)+dm(icp)
+                IF ((imode == mode_acc_sol) .AND. (nmasimscsuaccsol > 0))      &
+                  bud_aer_mas(jl,nmasimscsuaccsol)=                            &
+                    bud_aer_mas(jl,nmasimscsuaccsol)+dm(icp)
+                IF ((imode == mode_cor_sol) .AND. (nmasimscsucorsol > 0))      &
+                  bud_aer_mas(jl,nmasimscsucorsol)=                            &
+                    bud_aer_mas(jl,nmasimscsucorsol)+dm(icp)
+              END IF
               IF (icp == cp_du) THEN
                 IF ((imode == mode_acc_insol) .AND. (nmasimscduaccins > 0))    &
                   bud_aer_mas(jl,nmasimscduaccins)=                            &
@@ -426,7 +457,7 @@ END DO ! .. jl
 
 ! Apply extra checks on MDT being out of range after impaction scavenging
 IF (iextra_checks > 1 ) THEN !do this only when ie_c = 2
-  DO imode=mode_acc_insol, mode_sup_insol
+  DO imode=botmode, mode_sup_insol
     IF (mode(imode)) THEN
       mask(:) = .TRUE. ! dummy mask
       CALL ukca_mode_check_mdt(nbox, imode, mdt, md, nd, mask)

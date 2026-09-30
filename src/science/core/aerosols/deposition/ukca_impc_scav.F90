@@ -209,7 +209,7 @@ RETURN
 END SUBROUTINE ukca_mode_imscavcoff
 ! ----------------------------------------------------------------------
 SUBROUTINE ukca_impc_scav(nbox,nbudaer,nd,md,                                  &
- crain,drain,csnow,dsnow,wetdp,dtc,l_dust_mp_slinn_impc_scav,bud_aer_mas)
+ crain,drain,csnow,dsnow,wetdp,dtc,iimscav,bud_aer_mas)
 ! ----------------------------------------------------------------------
 !
 !     Subroutine to calculate impaction scavenging of aerosols
@@ -314,8 +314,9 @@ SUBROUTINE ukca_impc_scav(nbox,nbudaer,nd,md,                                  &
 !     dsnow       : Dynamic snowfall rate array (kgm^-2s^-1)
 !     WETDP       : Wet diameter corresponding to DRYDP (m)
 !     DTC         : Time step of process (s)
-!     L_DUST_MP_SLINN_IMPC_SCAV : Flag for new impaction scavenging
-!                                 scheme for dust and microplastics
+!     iimscav     : Switch for new impaction scavenging
+!                   scheme for dust and microplastics but extended to
+!                   all modes for iimscav = 2
 !
 !     Outputs
 !     -------
@@ -421,6 +422,7 @@ IMPLICIT NONE
 ! .. Subroutine interface
 INTEGER, INTENT(IN) :: nbox
 INTEGER, INTENT(IN) :: nbudaer
+INTEGER, INTENT(IN)  :: iimscav
 REAL, INTENT(IN)    :: md(nbox,nmodes,glomap_variables%ncp)
 REAL, INTENT(IN)    :: wetdp(nbox,nmodes)
 REAL, INTENT(IN)    :: dtc
@@ -428,7 +430,6 @@ REAL, INTENT(IN)    :: crain(nbox)
 REAL, INTENT(IN)    :: drain(nbox)
 REAL, INTENT(IN)    :: csnow(nbox)
 REAL, INTENT(IN)    :: dsnow(nbox)
-LOGICAL, INTENT(IN)  :: l_dust_mp_slinn_impc_scav
 REAL, INTENT(IN OUT) :: nd(nbox,nmodes)
 REAL, INTENT(IN OUT) :: bud_aer_mas(nbox,0:nbudaer)
 
@@ -521,11 +522,14 @@ num_eps     => glomap_variables%num_eps
 ! Below cloud scavenging for dust by rain for the accumulation/coarse
 ! insoluble modes can now be dealt with in a separate module. Snow is
 ! still accounted for in this routine though
-IF (l_dust_mp_slinn_impc_scav) THEN
-  topmode = mode_ait_insol
-ELSE
-  topmode = nmodes
-END IF
+SELECT CASE (iimscav)
+CASE (0)
+  topmode = nmodes ! Use single moment scheme for all modes
+CASE (1)
+  topmode = mode_ait_insol ! Use single moment scheme for non-dust
+CASE (2)
+  topmode = 0 ! Use double moment scheme for all modes
+END SELECT
 
 IF (glomap_config%l_fix_ukca_impscav) THEN
 
