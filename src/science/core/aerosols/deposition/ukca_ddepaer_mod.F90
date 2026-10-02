@@ -279,6 +279,7 @@ REAL,    POINTER :: sigmag(:)
 
 INTEGER :: imode
 INTEGER :: icp
+INTEGER :: inbox
 LOGICAL (KIND=log_small) :: mask3(nbox)
 LOGICAL (KIND=log_small) :: mask4(nbox)
 LOGICAL (KIND=log_small) :: masksurf(nbox)
@@ -337,6 +338,9 @@ dz(:)=(rgas*t(:)/gg)*LOG(plower(:)/pupper(:))
 
 ! .. Calculate aerodynamic resistance
 ar(:)=LOG(dzmid(:)/znot(:))/(vkman*ustr(:))
+DO inbox=1,nbox
+  ar(inbox)=MIN(0.0,ar(inbox)) !ar and flux could go negative if znot>dzmid
+END IF
 
 !    Loop over modes
 DO imode=1,nmodes
