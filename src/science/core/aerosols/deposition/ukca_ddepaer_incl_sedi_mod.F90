@@ -434,8 +434,8 @@ masksurf(:)=(surtp(:) < 2.0) ! create mask for boxes at surface.
 ! .. Calculate aerodynamic resistance (only in gridboxes at surface)
 WHERE (masksurf(:)) ar(:)=LOG(dzmid(:)/znot(:))/(vkman*ustr(:))
 DO inbox=1,nbox
-  ar(inbox)=MIN(0.0,ar(inbox)) !ar and flux could go negative if znot>dzmid
-END IF
+  ar(inbox)=MAX(0.0,ar(inbox)) !ar and flux could go negative if znot>dzmid
+END DO
 
 DO imode=1,nmodes
   IF (mode(imode)) THEN
